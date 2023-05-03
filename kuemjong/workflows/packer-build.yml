@@ -1,0 +1,56 @@
+name: Packer-Build Called CI/CD
+
+on:
+  workflow_call:
+    secrets:
+      AWS_REGION:
+        required: true
+      AWS_ACCESS_KEY:
+        required: true
+      AWS_SECRET_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+  AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+
+jobs:
+  packer_build:
+    name: Update AMI with Packer Build.
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Grant execute permission for shell files.
+        run: | 
+            chmod +x ./packer/script/01_init_dependencies.sh
+            chmod +x ./packer/script/02_packer_build.sh
+            chmod +x ./packer/script/03_update_terraform_state.sh
+
+      - name: Install dependencies
+        run : ./packer/script/01_init_dependencies.sh
+
+      - name: Build AMI with Packer
+        run : ./packer/script/02_packer_build.sh
+
+      - name: Update Terraform Remote State
+        run: ./packer/script/03_update_terraform_state.sh
+
+      - name: Move Directory
+        run: cd ./terraform/dev
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+
